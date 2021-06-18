@@ -589,5 +589,43 @@
 ##
 ## zpmC uses a new recurrence relation
 
+## 20200719
+##
+## Low level phase unwrapping code is now
+## written in C++
+##
+## more file splits to better group routines
 
+## 20200914
+##
+## added argument refinecp to psfit_options()
+## to control refinement step in circle.pars
+##
+## cleaned up fftfit source
+##
+## earlier this summer: added circle.hough
+
+## 20200929
+##
+## added vortexfit
+## removed refinecp and implementing code in circle.pars
+## default fitting routine in circle.pars is nlsrob from package robustbase
+
+## 20210612
+##
+## removed R code for gradient and derivatives of Zernikes except function rzernike.
+## add c++ code for zernikes and gradients in cartesian coordinates
+## add makezlist.iso
+## fix makezlist to give correct result when minorder=0
+## returns from psifit, fftfit, vortexfit are assigned S3 class "wf_fitted"
+
+## 20210613
+##
+## added function PVr
+## split out wf_net() into its own file
+
+## 20210613
+##
+## Changes to pupil(), startest(), synth.interferogram()
+## cleaned up documentation
 

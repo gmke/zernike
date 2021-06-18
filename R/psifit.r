@@ -1,16 +1,20 @@
-psfit_options <- function(refine=TRUE, puw_alg = "qual", fringescale=1,
+## options for fringe analysis routines, wavefront fitting and wavefront display
+
+psfit_options <- function(colors=topo.colors(256), refine=TRUE, puw_alg = "qual", fringescale=1,
                     wt=NULL, bgsub=TRUE,
                     maxiter=20, ptol=1.e-4, trace=1, nzcs = 2,
-                    zc0=c(1:3, 6:7),
+                    zc0=6:7,
                     satarget=c(0,0), astig.bath=c(0,0),
-                    maxorder=14, uselm=FALSE, sgs=1,
-                    plots=TRUE, crop=FALSE, colors=topo.colors(256)) {
-  list(refine=refine, puw_alg=puw_alg, fringescale=fringescale,
+                    maxorder=14, uselm=FALSE, isoseq=FALSE, sgs=1,
+                    nthreads=parallel::detectCores()/2,
+                    plots=TRUE, crop=FALSE) {
+  list(colors=colors, refine=refine, puw_alg=puw_alg, fringescale=fringescale,
        wt=wt, bgsub=bgsub,
        maxiter=maxiter, ptol=ptol, trace=trace, nzcs=nzcs,
        zc0=zc0, satarget=satarget, astig.bath=astig.bath,
-       maxorder=maxorder, uselm=uselm, sgs=sgs,
-       plots=plots, crop=crop, colors=colors)
+       maxorder=maxorder, uselm=uselm, isoseq=isoseq, sgs=sgs,
+       nthreads=nthreads,
+       plots=plots, crop=crop)
 }
 
 psifit <- function(images, phases, cp=NULL, satarget=NULL, psialg ="ls", options=psfit_options()) {
@@ -152,7 +156,7 @@ psifit <- function(images, phases, cp=NULL, satarget=NULL, psialg ="ls", options
   if (is.null(cp)) {
     phi <- matrix(psfit$phi, ncol=nc)
     mod <- matrix(psfit$mod, ncol=nc)
-    cp <- circle.pars(mod, plot=options$plots, ask=FALSE)
+    cp <- circle.pars(mod, plot=options$plots)
     prt <- pupil.rhotheta(nr, nc, cp)
   }
   if (refine || psialg=="gpcthentilt") {
@@ -237,75 +241,11 @@ psifit <- function(images, phases, cp=NULL, satarget=NULL, psialg ="ls", options
   class(wf.raw) <- "pupil"
   wfnets <- wf_net(wf.raw, cp, options)
   if(length(psfit) > 3) extras <- psfit[4:length(psfit)]
-  list(phi=phi, mod=mod, phases=wrap(as.vector(phases)), cp=cp.orig,
+  outs <- list(phi=phi, mod=mod, phases=wrap(as.vector(phases)), 
+       cp=cp, cp.orig=cp.orig,
        wf.net=wfnets$wf.net, wf.smooth=wfnets$wf.smooth,wf.residual=wfnets$wf.residual,
        fit=wfnets$fit, zcoef.net=wfnets$zcoef.net, extras=extras)
+  class(outs) <- append(class(outs), "wf_fitted")
+  outs
 }
 
-wf_net <- function(wf.raw, cp, options) {
-  zlist <- makezlist(maxorder=options$maxorder)
-  nr <- nrow(wf.raw)
-  nc <- ncol(wf.raw)
-  prt <- pupil.rhotheta(nr, nc, cp)
-  rho <- prt$rho
-  theta <- prt$theta
-  if (options$sgs > 1) {
-    subs <- matrix(FALSE, nr, nc)
-    subs[seq(1, nr, by=options$sgs), seq(1, nc, by=options$sgs)] <- TRUE
-    subs[is.na(rho)] <- FALSE
-  } else {
-    subs <- !is.na(rho)
-  }
-  wf.v <- wf.raw[subs]
-  rho.v <- rho[subs]
-  th.v <- theta[subs]
-  rho.v <- rho.v[!is.na(wf.v)]
-  th.v <- th.v[!is.na(wf.v)]
-  wf.v <- wf.v[!is.na(wf.v)]
-  fit <- fitzernikes(wf.v, rho.v, th.v, maxorder=options$maxorder, uselm=options$uselm)
-  if (options$uselm) {
-    cfit <- coef(fit)
-  } else {
-    cfit <- fit
-  }
-  if (sign(cfit[9])*sign(options$satarget[1]) < 0) {
-    cfit <- -cfit
-    wf.raw <- -wf.raw
-    if (!options$uselm) fit <- -fit
-  }
-  zc.low <- rep(0,15)
-  zc.low[options$zc0] <- cfit[options$zc0+1]
-  zc.low[c(8,15)] <- zc.low[c(8,15)] + options$satarget
-  zc.low[4:5] <- zc.low[4:5] + options$astig.bath
-  wf.net <- wf.raw - pupil(zcoef=zc.low, zlist=makezlist(2,6), piston=cfit[1], 
-                           nrow=nr, ncol=nc, cp=cp)
-  if (options$plots) {
-    if (tolower(.Platform$OS.type) == "windows") {
-      windows(width=18, height=6)
-    } else {
-        x11(width=18, height=6)
-    }
-    split.screen(figs=c(1,3))
-    screen(1)
-    plot(wf.net, cp=cp, col=options$colors, addContours=FALSE)
-    mtext(paste("RMS = ", format(pupilrms(wf.net),digits=3)))
-  }
-  zcoef.net <- cfit[-1]
-  zcoef.net[1:15] <- zcoef.net[1:15] - zc.low
-  wf.smooth <- pupil(zcoef=zcoef.net, zlist=zlist, cp=cp, nrow=nr, ncol=nc)
-  if (options$plots) {
-    screen(2)
-    plot(wf.smooth, cp=cp, col=options$colors)
-    mtext(paste("RMS = ", format(pupilrms(wf.smooth),digits=3)))
-  }
-  wf.residual <- wf.net - wf.smooth
-  if (options$plots) {
-    screen(3)
-    plot(wf.residual, cp=cp, col=grey256, addContours=FALSE)
-    mtext(paste("RMS = ", format(pupilrms(wf.residual),digits=3)))
-    close.screen(all.screens=TRUE)
-  }
-  list(wf.net=wf.net, wf.smooth=wf.smooth, wf.residual=wf.residual, 
-       fit=fit, zcoef.net=zcoef.net)
-}
-          

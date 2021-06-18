@@ -26,7 +26,7 @@ typedef struct {vec x; bool convergence; int iter;} lmreturn;
 
 lmreturn mylevmar(vec (*res_fun)(const vec&, const List&),
              mat (*jac_fun)(const vec&, const List&),
-             uword m, int n, vec x0, List adata,
+             uword m, uword n, vec x0, List adata,
              int itmax = 100, vec control= {1.e-3, 2., sqrt(datum::eps), sqrt(datum::eps)}) {
   
   int k=0;
@@ -216,7 +216,7 @@ List tiltpsiC(const mat& images, const rowvec& phases_init, const mat& coords,
     adata["bbar"] = bbar;
     adata["phi"] = phi;
     
-    for (int n=0; n<N; n++) {
+    for (uword n=0; n<N; n++) {
       pars(0) = phases(n);
       pars.tail(np-1) = zcs.col(n);
       adata["img"] = images.col(n);
